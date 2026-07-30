@@ -98,6 +98,7 @@ git switch -c feature/player-movement
 - `feature/snow-system`
 - `feature/wave-system`
 - `feature/ui`
+（上記のは一例なので変更可能性あり）
 
 実装が完了したらcommit・pushし、GitHubでPull Requestを作成して `main` にマージします。
 
