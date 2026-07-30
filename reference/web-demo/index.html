@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>白 - 雪原鬼ごっこ デモ</title>
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#0d1117; height:100%; }
+  #app { position:relative; width:100vw; height:100vh; }
+  canvas { display:block; }
+  #ui {
+    position:absolute; top:0; left:0; width:100%; padding:18px 22px; box-sizing:border-box;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    font-family: system-ui, -apple-system, sans-serif; color:#fff; pointer-events:none;
+  }
+  #timer { font-size: 30px; font-weight:600; letter-spacing:1px; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  #lives { font-size: 22px; letter-spacing:5px; color:#ff8b7a; text-shadow:0 1px 4px rgba(0,0,0,.6); }
+  #hint {
+    position:absolute; bottom:16px; left:16px; font-size:12px; color:#c7cfd4;
+    background:rgba(0,0,0,.35); padding:8px 12px; border-radius:6px;
+    font-family: system-ui, sans-serif; line-height:1.6; pointer-events:none;
+  }
+  #debugToggle {
+    position:absolute; bottom:16px; right:16px; font-size:12px; color:#c7cfd4;
+    background:rgba(0,0,0,.35); padding:8px 12px; border-radius:6px; pointer-events:auto;
+    font-family: system-ui, sans-serif; cursor:pointer; user-select:none;
+  }
+  #staminaWrap {
+    position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+    width:220px; height:8px; background:rgba(255,255,255,.15); border-radius:4px; overflow:hidden;
+  }
+  #staminaBar { height:100%; width:100%; background:#5DCAA5; transition:width .05s linear; }
+  .screen {
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    flex-direction:column; background:rgba(8,12,16,.8); color:#fff; font-family:system-ui, sans-serif;
+    text-align:center; padding:24px; box-sizing:border-box;
+  }
+  .screen h1 { font-size:38px; font-weight:600; margin:0 0 14px; letter-spacing:.5px; }
+  .screen p { font-size:17px; margin:0 0 30px; color:#d8dee3; max-width:480px; line-height:1.7; }
+  .screen .btnRow { display:flex; gap:14px; }
+  .screen button {
+    font-size:16px; padding:11px 30px; border-radius:8px; border:none;
+    background:#1D9E75; color:#fff; cursor:pointer; font-weight:500;
+  }
+  .screen button:hover { background:#0F6E56; }
+  .screen button.secondary { background:rgba(255,255,255,.14); }
+  .screen button.secondary:hover { background:rgba(255,255,255,.24); }
+  #titleScreen { background:#0d1117; } /* ゲーム画面が透けて見えないよう不透明にし、別画面として見せる */
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="ui">
+    <div id="timer">00:00</div>
+    <div id="lives">♥ ♥ ♥</div>
+  </div>
+  <div id="hint">移動: W A S D / 矢印キー　ダッシュ: Shift（雪が踏み固まり足跡が残ります）</div>
+  <div id="staminaWrap"><div id="staminaBar"></div></div>
+  <label id="debugToggle">
+    <input type="checkbox" id="debugCheck" style="vertical-align:middle;margin-right:6px;">敵を表示（デバッグ）
+  </label>
+
+  <div id="titleScreen" class="screen">
+    <h1>白</h1>
+    <p>（タイトル未定）雪原の鬼ごっこ。敵の姿は見えない、頼りは足跡だけ。</p>
+    <button id="startBtn">スタート</button>
+  </div>
+
+  <div id="overlay" class="screen">
+    <h1>捕まりました</h1>
+    <p id="finalTime">生存時間: 00:00</p>
+    <div class="btnRow">
+      <button id="retryBtn">もう一度</button>
+      <button id="titleBtn" class="secondary">タイトルへ戻る</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+(() => {
+  // ================= 設定値（あとで自由に調整してください） =================
+  const WORLD_W = 36, WORLD_H = 20;      // 広場のワールドサイズ
+  const CELL = 0.5;                       // 雪グリッドのマスサイズ
+  const GRID_W = Math.round(WORLD_W/CELL), GRID_H = Math.round(WORLD_H/CELL);
+  const PX = 16;                          // グリッド1マスあたりのテクスチャpx（足跡の形が見えるよう高めに）
+
+  const NORMAL_SPEED = 4;
+  const DASH_SPEED = 8.5;
+  const STAMINA_MAX = 100;
+  const STAMINA_DRAIN = 35;               // ダッシュ中/秒
+  const STAMINA_REGEN = 18;               // 通常時/秒
+
+  const ENEMY_BASE_SPEED = 2.6;
+  const ENEMY_RETARGET_SEC = 0.5;         // 敵がプレイヤー座標を再取得する間隔
+  const ENEMY_SPAWN_SEC = 10;             // 敵追加の間隔（上限なし）
+  const COLLISION_DIST = 0.78;
+  const INVINCIBLE_SEC = 2.0;
+  const LIVES_START = 3;
+  const CORNER_INSET = 2.5;
+
+  const SNOW_COLOR = [246, 250, 252];
+  const STRIDE_LEN = 1.3;                 // 1歩ごとに足跡を刻む距離（世界単位）
+  const FOOT_OFFSET = 0.3;                // 進行方向に対して左右の足の間隔
+  const FOOTPRINT_LEN = 1.0;              // 足跡1つの長さ（世界単位）
+  const FOOTPRINT_WID = 0.5;              // 足跡1つの幅（世界単位）
+  const FOOTPRINT_FILL = 'rgb(104,119,131)'; // 不透明の固定色（重なっても濃くならない）
+
+  // ================= レンダラー / シーン =================
+  const app = document.getElementById('app');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  app.insertBefore(renderer.domElement, app.firstChild);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d1117);
+
+  // 立体感を出すための光源。真上からの平行光だけだと陰影が出ないので、斜めから当てて影を落とす
+  const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+  scene.add(ambient);
+  const sun = new THREE.DirectionalLight(0xfff6e8, 0.9);
+  sun.position.set(-14, 22, 10);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -WORLD_W/2 - 3;
+  sun.shadow.camera.right = WORLD_W/2 + 3;
+  sun.shadow.camera.top = WORLD_H/2 + 3;
+  sun.shadow.camera.bottom = -WORLD_H/2 - 3;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 60;
+  sun.shadow.bias = -0.0015;
+  scene.add(sun);
+
+  // カメラは真上ではなく少しだけ傾けることで、鬼ごっこの舞台の奥行きが感じられるようにする
+  const TILT_DEG = 22;
+  let camera;
+  function setupCamera() {
+    const aspect = window.innerWidth / window.innerHeight;
+    const worldAspect = WORLD_W / WORLD_H;
+    const margin = 1.3; // 傾きの分、余裕を多めに取って広場全体が画面に収まるようにする
+    let halfW, halfH;
+    if (aspect > worldAspect) {
+      halfH = (WORLD_H/2) * margin;
+      halfW = halfH * aspect;
+    } else {
+      halfW = (WORLD_W/2) * margin;
+      halfH = halfW / aspect;
+    }
+    camera = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 100);
+    const tiltRad = TILT_DEG * Math.PI/180;
+    const dist = 32;
+    camera.position.set(0, dist*Math.cos(tiltRad), dist*Math.sin(tiltRad));
+    camera.up.set(0, 1, 0);
+    camera.lookAt(0, 0, 0);
+  }
+  function resize() {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    setupCamera();
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ================= 雪グリッド（判定専用。一度でも踏まれたマスは永久にtrue） =================
+  const grid = [];
+  for (let gy=0; gy<GRID_H; gy++) {
+    const row = [];
+    for (let gx=0; gx<GRID_W; gx++) row.push({ packed:false });
+    grid.push(row);
+  }
+
+  const groundCanvas = document.createElement('canvas');
+  groundCanvas.width = GRID_W*PX;
+  groundCanvas.height = GRID_H*PX;
+  const gctx = groundCanvas.getContext('2d');
+  gctx.fillStyle = `rgb(${SNOW_COLOR.join(',')})`;
+  gctx.fillRect(0, 0, groundCanvas.width, groundCanvas.height);
+  const PX_PER_UNIT = groundCanvas.width / WORLD_W; // world 1単位あたりのテクスチャpx（縦横で共通）
+
+  const groundTexture = new THREE.CanvasTexture(groundCanvas);
+  groundTexture.minFilter = THREE.LinearFilter;
+  const groundGeo = new THREE.PlaneGeometry(WORLD_W, WORLD_H);
+  const groundMat = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 0.9, metalness: 0 });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  function worldToGrid(x, z) {
+    return {
+      gx: Math.floor((x + WORLD_W/2)/CELL),
+      gy: Math.floor((z + WORLD_H/2)/CELL),
+    };
+  }
+
+  // 人の足跡のような形を、進行方向に合わせて雪面テクスチャに直接焼き込む。
+  // 一度描いた足跡・踏み固めたマスは消さない（=雪は元に戻らない）。
+  function placeFootprint(worldX, worldZ, dirX, dirZ, side, scale) {
+    const { gx, gy } = worldToGrid(worldX, worldZ);
+    if (gx<0 || gy<0 || gx>=GRID_W || gy>=GRID_H) return;
+    const cell = grid[gy][gx];
+    if (cell.packed) return; // 既にこのマスは踏まれている＝新しい足跡は残らない
+    cell.packed = true;
+
+    const px = (worldX + WORLD_W/2) * PX_PER_UNIT;
+    const py = (worldZ + WORLD_H/2) * PX_PER_UNIT;
+    const angle = Math.atan2(dirX, dirZ);
+    const lateral = side ? FOOT_OFFSET : -FOOT_OFFSET;
+    const offX = -dirZ * lateral * PX_PER_UNIT;
+    const offY =  dirX * lateral * PX_PER_UNIT;
+
+    gctx.save();
+    gctx.translate(px + offX, py + offY);
+    gctx.rotate(angle);
+    gctx.fillStyle = FOOTPRINT_FILL;
+    gctx.beginPath();
+    gctx.ellipse(0, 0, FOOTPRINT_WID*scale*PX_PER_UNIT/2, FOOTPRINT_LEN*scale*PX_PER_UNIT/2, 0, 0, Math.PI*2);
+    gctx.fill();
+    gctx.restore();
+    groundTexture.needsUpdate = true;
+  }
+
+  // 移動距離を歩幅ぶんだけ蓄積し、STRIDE_LENを超えるたびに片足ずつ足跡を刻む
+  function advanceFootsteps(entity, moveDist, dirX, dirZ, worldX, worldZ) {
+    if (moveDist <= 0) return;
+    entity.strideAccum += moveDist;
+    while (entity.strideAccum >= STRIDE_LEN) {
+      entity.strideAccum -= STRIDE_LEN;
+      placeFootprint(worldX, worldZ, dirX, dirZ, entity.footSide, entity.footScale || 1);
+      entity.footSide = !entity.footSide;
+    }
+  }
+
+  // ================= 外周の木（装飾のみ） =================
+  function makeTree(x, z) {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.16, 0.6, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6b4a35, roughness: 1 })
+    );
+    trunk.position.y = 0.3;
+    trunk.castShadow = true;
+    const leaves = new THREE.Mesh(
+      new THREE.ConeGeometry(0.55, 1.3, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3b6d11, roughness: 0.9 })
+    );
+    leaves.position.y = 1.1;
+    leaves.castShadow = true;
+    g.add(trunk, leaves);
+    g.position.set(x, 0, z);
+    return g;
+  }
+  {
+    const halfW = WORLD_W/2 + 1.2, halfH = WORLD_H/2 + 1.2;
+    for (let x=-WORLD_W/2; x<=WORLD_W/2; x+=4) {
+      scene.add(makeTree(x, -halfH));
+      scene.add(makeTree(x, halfH));
+    }
+    for (let z=-WORLD_H/2+4; z<WORLD_H/2; z+=4) {
+      scene.add(makeTree(-halfW, z));
+      scene.add(makeTree(halfW, z));
+    }
+  }
+
+  // ================= プレイヤー（本番の見た目に差し替える前提の仮アバター） =================
+  const player = {
+    pos: new THREE.Vector3(0, 0, 0),
+    angle: 0,
+    dashing: false,
+    stamina: STAMINA_MAX,
+    invincibleUntil: -1,
+    lives: LIVES_START,
+    strideAccum: 0,
+    footSide: false,
+  };
+  const playerMesh = new THREE.Group();
+  const pBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.27, 0.35, 0.74, 10),
+    new THREE.MeshStandardMaterial({ color: 0x1D9E75, roughness: 0.6 })
+  );
+  pBody.position.y = 0.68;
+  pBody.castShadow = true;
+  const pHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.27, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0xCECBF6, roughness: 0.5 })
+  );
+  pHead.position.y = 1.32;
+  pHead.castShadow = true;
+  const pNose = new THREE.Mesh(
+    new THREE.ConeGeometry(0.095, 0.3, 8),
+    new THREE.MeshStandardMaterial({ color: 0x0F6E56, roughness: 0.6 })
+  );
+  pNose.rotation.x = Math.PI/2;
+  pNose.position.set(0, 0.68, 0.38);
+  playerMesh.add(pBody, pHead, pNose);
+  scene.add(playerMesh);
+
+  // ================= 敵 =================
+  const enemies = [];
+  let showEnemies = false;
+  function spawnEnemy(x, z, footScale=1) {
+    const jitterX = (Math.random()-0.5)*1.6;
+    const jitterZ = (Math.random()-0.5)*1.6;
+    const big = footScale > 1;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(big ? 0.4 : 0.3, 10, 10),
+      new THREE.MeshStandardMaterial({ color: big ? 0xEF9F27 : 0xD85A30, roughness: 0.6 })
+    );
+    mesh.castShadow = true;
+    mesh.visible = showEnemies; // visibleごと切り替える（material.visibleだけだと影が出て位置がバレてしまう）
+    scene.add(mesh);
+    enemies.push({
+      pos: new THREE.Vector3(x+jitterX, 0, z+jitterZ),
+      target: new THREE.Vector3(x, 0, z),
+      speed: ENEMY_BASE_SPEED + (Math.random()-0.5)*0.8,
+      retargetTimer: Math.random()*ENEMY_RETARGET_SEC,
+      strideAccum: Math.random()*STRIDE_LEN,
+      footSide: Math.random() < 0.5,
+      footScale,
+      mesh,
+    });
+  }
+  const corners = [
+    [-(WORLD_W/2-CORNER_INSET), -(WORLD_H/2-CORNER_INSET)],
+    [ (WORLD_W/2-CORNER_INSET), -(WORLD_H/2-CORNER_INSET)],
+    [-(WORLD_W/2-CORNER_INSET),  (WORLD_H/2-CORNER_INSET)],
+    [ (WORLD_W/2-CORNER_INSET),  (WORLD_H/2-CORNER_INSET)],
+  ];
+
+  const debugCheck = document.getElementById('debugCheck');
+  debugCheck.addEventListener('change', () => {
+    showEnemies = debugCheck.checked;
+    enemies.forEach(e => { e.mesh.visible = showEnemies; });
+  });
+
+  // ================= 入力 =================
+  const keys = {};
+  window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+  // ================= 画面状態（タイトル / ゲーム / 終了） =================
+  let survivalTime = 0;
+  let spawnTimer = 0;
+  let gameState = 'title'; // 'title' | 'playing' | 'ended'
+  const timerEl = document.getElementById('timer');
+  const livesEl = document.getElementById('lives');
+  const overlayEl = document.getElementById('overlay');
+  const finalTimeEl = document.getElementById('finalTime');
+  const staminaBar = document.getElementById('staminaBar');
+  const titleScreen = document.getElementById('titleScreen');
+
+  function fmtTime(t) {
+    const m = Math.floor(t/60), s = Math.floor(t%60);
+    return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  function updateLivesUI() {
+    livesEl.textContent = player.lives > 0 ? '♥ '.repeat(player.lives).trim() : '';
+  }
+
+  function showScreen(state) {
+    gameState = state;
+    titleScreen.style.display = state === 'title' ? 'flex' : 'none';
+    overlayEl.style.display = state === 'ended' ? 'flex' : 'none';
+  }
+
+  // タイトルへ戻る時・スタート/もう一度を押した時、どちらでも呼び、常にまっさらな状態から始める
+  function resetGame() {
+    for (let gy=0; gy<GRID_H; gy++) for (let gx=0; gx<GRID_W; gx++) grid[gy][gx].packed = false;
+    gctx.fillStyle = `rgb(${SNOW_COLOR.join(',')})`;
+    gctx.fillRect(0, 0, groundCanvas.width, groundCanvas.height);
+    groundTexture.needsUpdate = true;
+
+    for (const en of enemies) scene.remove(en.mesh);
+    enemies.length = 0;
+    corners.forEach(([x,z]) => spawnEnemy(x,z));
+
+    player.pos.set(0, 0, 0);
+    player.angle = 0;
+    player.dashing = false;
+    player.stamina = STAMINA_MAX;
+    player.invincibleUntil = -1;
+    player.lives = LIVES_START;
+    player.strideAccum = 0;
+    player.footSide = false;
+    playerMesh.position.set(0, 0, 0);
+    playerMesh.rotation.y = 0;
+    staminaBar.style.width = '100%';
+    updateLivesUI();
+
+    survivalTime = 0;
+    spawnTimer = 0;
+    timerEl.textContent = '00:00';
+  }
+
+  function endGame() {
+    finalTimeEl.textContent = '生存時間: ' + fmtTime(survivalTime);
+    showScreen('ended');
+  }
+
+  document.getElementById('startBtn').addEventListener('click', () => { resetGame(); showScreen('playing'); });
+  document.getElementById('retryBtn').addEventListener('click', () => { resetGame(); showScreen('playing'); });
+  document.getElementById('titleBtn').addEventListener('click', () => { resetGame(); showScreen('title'); });
+
+  resetGame();
+  showScreen('title');
+
+  // ================= メインループ =================
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const now = clock.elapsedTime;
+
+    if (gameState === 'playing') {
+      survivalTime += dt;
+      timerEl.textContent = fmtTime(survivalTime);
+
+      // --- プレイヤー移動 ---
+      let mx=0, mz=0;
+      if (keys['w']||keys['arrowup']) mz -= 1;
+      if (keys['s']||keys['arrowdown']) mz += 1;
+      if (keys['a']||keys['arrowleft']) mx -= 1;
+      if (keys['d']||keys['arrowright']) mx += 1;
+      const moving = mx!==0 || mz!==0;
+      if (moving) { const len=Math.hypot(mx,mz); mx/=len; mz/=len; }
+
+      player.dashing = keys['shift'] && player.stamina > 0 && moving;
+      player.stamina = player.dashing
+        ? Math.max(0, player.stamina - STAMINA_DRAIN*dt)
+        : Math.min(STAMINA_MAX, player.stamina + STAMINA_REGEN*dt);
+      staminaBar.style.width = (player.stamina/STAMINA_MAX*100) + '%';
+
+      const speed = player.dashing ? DASH_SPEED : NORMAL_SPEED;
+      if (moving) {
+        player.pos.x += mx*speed*dt;
+        player.pos.z += mz*speed*dt;
+        player.angle = Math.atan2(mx, mz);
+      }
+      player.pos.x = Math.max(-WORLD_W/2+0.5, Math.min(WORLD_W/2-0.5, player.pos.x));
+      player.pos.z = Math.max(-WORLD_H/2+0.5, Math.min(WORLD_H/2-0.5, player.pos.z));
+      playerMesh.position.set(player.pos.x, 0, player.pos.z);
+      playerMesh.rotation.y = player.angle;
+
+      if (player.dashing) {
+        advanceFootsteps(player, speed*dt, mx, mz, player.pos.x, player.pos.z);
+      }
+
+      // --- 敵の追加（上限なし・3回に1回は足跡が3倍の敵） ---
+      spawnTimer += dt;
+      if (spawnTimer >= ENEMY_SPAWN_SEC) {
+        spawnTimer -= ENEMY_SPAWN_SEC;
+        const c = corners[Math.floor(Math.random()*4)];
+        const footScale = Math.random() < 1/3 ? 3 : 1;
+        spawnEnemy(c[0], c[1], footScale);
+      }
+
+      // --- 敵の移動・被弾判定 ---
+      for (const en of enemies) {
+        en.retargetTimer -= dt;
+        if (en.retargetTimer <= 0) {
+          en.retargetTimer += ENEMY_RETARGET_SEC;
+          en.target.set(player.pos.x, 0, player.pos.z);
+        }
+        const dx = en.target.x - en.pos.x, dz = en.target.z - en.pos.z;
+        const dist = Math.hypot(dx,dz);
+        if (dist > 0.05) {
+          const step = Math.min(dist, en.speed*dt);
+          en.pos.x += dx/dist*step;
+          en.pos.z += dz/dist*step;
+        }
+        en.mesh.position.set(en.pos.x, 0.3, en.pos.z);
+
+        if (dist > 0.05) {
+          advanceFootsteps(en, Math.min(dist, en.speed*dt), dx/dist, dz/dist, en.pos.x, en.pos.z);
+        }
+
+        if (now > player.invincibleUntil) {
+          const pdist = Math.hypot(en.pos.x-player.pos.x, en.pos.z-player.pos.z);
+          if (pdist < COLLISION_DIST) {
+            player.lives--;
+            updateLivesUI();
+            player.invincibleUntil = now + INVINCIBLE_SEC;
+            if (player.lives <= 0) endGame();
+          }
+        }
+      }
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+</script>
+</body>
+</html>
