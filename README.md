@@ -1,107 +1,275 @@
 # unity1week-shiro
 
-Unity1week「しろ」向けに制作するゲームです。
+Unity1weekのお題 **「しろ」** をテーマに制作するゲームです。
 
-## ゲーム概要
+---
+
+# ゲーム概要
 
 雪原の中で、姿の見えない敵から逃げ続けるサバイバルゲームです。
 
-敵そのものは見えず、雪の上に残る足跡を頼りに位置を把握します。
+敵そのものは見えず、雪の上に残る**足跡**を頼りに敵の位置を推測します。
 
-ただし、同じ場所を何度も通ると雪がなくなり、足跡が残らなくなります。
-時間が経つほど敵の位置を把握しづらくなり、自然に難易度が上昇します。
+しかし、同じ場所を何度も歩くと雪が踏み固められ、その場所には足跡が残らなくなります。
 
-一定時間生き残ると雪が復活し、次のWaveでは敵の数が増えます。
+時間が経つにつれて敵の位置を把握しづらくなり、自然と難易度が上昇します。
 
-## 開発環境
+一定時間生き残ると雪原がリセットされ、敵が増えた次のWaveが始まります。
 
-- Unity 6000.3.18f1
-- Visual Studio Code
-- Git / GitHub
+---
 
-## 開発ルール
+# 開発環境
 
-原則として `main` ブランチを直接編集せず、機能ごとにブランチを作成します。
+| 項目 | バージョン |
+|------|-----------|
+| Unity | 6000.3.18f1 |
+| エディタ | Visual Studio Code |
+| バージョン管理 | Git / GitHub |
 
-例：
+---
 
-- `feature/player-movement`
-- `feature/enemy`
-- `feature/footprints`
-- `feature/snow-system`
-- `feature/wave-system`
-- `feature/ui`
+# 初めて参加する人へ（環境構築）
 
-## 開発環境
+## ① このリポジトリをコピー（clone）する
 
-- Unity 6000.3.18f1
-- Visual Studio Code
-- Git / GitHub
+作業したい場所でターミナルを開き、以下を実行してください。
 
-## 環境構築・起動方法
-
-### 1. リポジトリをclone
-
-作業したい場所でターミナルを開き、以下を実行します。
-
+```bash
 git clone https://github.com/rhirooka/unity1week-shiro.git
+```
 
-cloneしたフォルダへ移動します。
+cloneが終わったらプロジェクトフォルダへ移動します。
 
+```bash
 cd unity1week-shiro
+```
 
-### 2. Unityのバージョンを確認
+---
 
-本プロジェクトでは以下のUnity Editorを使用します。
+## ② Unityのバージョンを確認する
 
-Unity 6000.3.18f1
+このプロジェクトは
 
-Unity Hubの `Installs` から、同じバージョンがインストールされていることを確認してください。
+**Unity 6000.3.18f1**
 
-### 3. Unity Hubにプロジェクトを追加
+で開発しています。
+
+Unity Hubの
+
+```
+Installs
+```
+
+から同じバージョンがインストールされていることを確認してください。
+
+※違うバージョンで開くとエラーになる可能性があります。
+
+---
+
+## ③ Unity Hubへプロジェクトを追加する
 
 Unity Hubを開き、
 
+```
 Add
-→ Add project from disk
+↓
+Add project from disk
+```
 
 を選択します。
 
-その後、cloneした `unity1week-shiro` フォルダを指定してください。
+cloneした
 
-### 4. Unityプロジェクトを起動
+```
+unity1week-shiro
+```
 
-Unity HubのProjectsに追加された `unity1week-shiro` を開きます。
+フォルダを指定してください。
 
-初回起動時は `Library` などのファイルが自動生成されるため、起動に時間がかかる場合があります。
+---
 
-## 開発を始めるとき
+## ④ プロジェクトを開く
 
-`main` ブランチを直接編集せず、作業ごとにブランチを作成します。
+Unity Hubから
 
-まず `main` を最新の状態にします。
+```
+unity1week-shiro
+```
 
+を開きます。
+
+初回起動時は
+
+- Library
+- Temp
+
+などのフォルダをUnityが自動生成するため、少し時間がかかります。
+
+これは正常です。
+
+---
+
+# 開発を始める前に
+
+このプロジェクトでは、
+
+**mainブランチを直接編集しません。**
+
+必ず作業用ブランチを作成してから開発してください。
+
+---
+
+## ① mainを最新にする
+
+まずmainブランチへ移動し、最新状態を取得します。
+
+```bash
 git switch main
 git pull origin main
+```
 
-その後、作業用ブランチを作成します。
+---
 
-例：
+## ② 作業用ブランチを作る
 
+自分専用のブランチを作ります。
+
+例
+
+```bash
 git switch -c feature/player-movement
+```
 
-作業内容に応じて、以下のようなブランチ名を使用します。
+ブランチ名は担当する機能に合わせて作成してください。
 
-- `feature/player-movement`
-- `feature/enemy`
-- `feature/footprints`
-- `feature/snow-system`
-- `feature/wave-system`
-- `feature/ui`
-（上記のは一例なので変更可能性あり）
+例
 
-実装が完了したらcommit・pushし、GitHubでPull Requestを作成して `main` にマージします。
+```
+feature/player-movement
+feature/enemy
+feature/footprints
+feature/snow-system
+feature/wave-system
+feature/ui
+```
 
-## テーマ
+※上記は一例です。機能名に合わせて変更して構いません。
 
-unity1week お題：「しろ」
+---
+
+# 開発中の流れ
+
+ゲームを作るときは毎回Web Buildする必要はありません。
+
+基本的には
+
+```
+コードを書く
+↓
+UnityでPlay
+↓
+動作確認
+↓
+修正
+```
+
+を繰り返します。
+
+機能が完成したら
+
+```
+commit
+↓
+push
+↓
+Pull Request
+```
+
+を作成してください。
+
+レビュー後、mainへマージします。
+
+---
+
+# コミット・Pushする方法
+
+変更が終わったら
+
+```bash
+git add .
+git commit -m "コミット内容"
+git push origin 作業ブランチ名
+```
+
+またはVS Codeのソース管理から
+
+```
+コミット
+↓
+同期（Push）
+```
+
+でも大丈夫です。
+
+---
+
+# Pull Request
+
+GitHub上で
+
+```
+Pull Request
+```
+
+を作成し、
+
+```
+作業ブランチ
+↓
+main
+```
+
+へマージします。
+
+**mainへ直接Pushしないようにしてください。**
+
+---
+
+# フォルダ構成
+
+```
+Assets/
+Packages/
+ProjectSettings/
+```
+
+はGitで管理しています。
+
+以下のフォルダはUnityが自動生成するためGit管理しません。
+
+```
+Library/
+Temp/
+Logs/
+Build/
+UserSettings/
+```
+
+---
+
+# テーマ
+
+Unity1week
+
+**お題：「しろ」**
+
+# web版公開
+（未記入）
+
+# メンバー
+
+| 名前 | 担当 |
+|------|------|
+| （未記入） | （未記入） |
+| （未記入） | （未記入） |
+| （未記入） | （未記入） |
