@@ -32,13 +32,74 @@ Unity1week「しろ」向けに制作するゲームです。
 - `feature/wave-system`
 - `feature/ui`
 
-## 起動方法
+## 開発環境
 
-1. このリポジトリをcloneする
-2. Unity Hubを開く
-3. `Add project from disk` を選択
-4. cloneしたフォルダを指定
-5. Unity 6000.3.18f1で開く
+- Unity 6000.3.18f1
+- Visual Studio Code
+- Git / GitHub
+
+## 環境構築・起動方法
+
+### 1. リポジトリをclone
+
+作業したい場所でターミナルを開き、以下を実行します。
+
+git clone https://github.com/rhirooka/unity1week-shiro.git
+
+cloneしたフォルダへ移動します。
+
+cd unity1week-shiro
+
+### 2. Unityのバージョンを確認
+
+本プロジェクトでは以下のUnity Editorを使用します。
+
+Unity 6000.3.18f1
+
+Unity Hubの `Installs` から、同じバージョンがインストールされていることを確認してください。
+
+### 3. Unity Hubにプロジェクトを追加
+
+Unity Hubを開き、
+
+Add
+→ Add project from disk
+
+を選択します。
+
+その後、cloneした `unity1week-shiro` フォルダを指定してください。
+
+### 4. Unityプロジェクトを起動
+
+Unity HubのProjectsに追加された `unity1week-shiro` を開きます。
+
+初回起動時は `Library` などのファイルが自動生成されるため、起動に時間がかかる場合があります。
+
+## 開発を始めるとき
+
+`main` ブランチを直接編集せず、作業ごとにブランチを作成します。
+
+まず `main` を最新の状態にします。
+
+git switch main
+git pull origin main
+
+その後、作業用ブランチを作成します。
+
+例：
+
+git switch -c feature/player-movement
+
+作業内容に応じて、以下のようなブランチ名を使用します。
+
+- `feature/player-movement`
+- `feature/enemy`
+- `feature/footprints`
+- `feature/snow-system`
+- `feature/wave-system`
+- `feature/ui`
+
+実装が完了したらcommit・pushし、GitHubでPull Requestを作成して `main` にマージします。
 
 ## テーマ
 
