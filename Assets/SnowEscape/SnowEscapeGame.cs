@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
@@ -18,16 +17,10 @@ namespace SnowEscape
         private const float WorldWidth = 36f;
         private const float WorldHeight = 20f;
         private const float CellSize = 0.5f;
-        private const float NormalSpeed = 4f;
-        private const float DashSpeed = 8.5f;
-        private const float StaminaMax = 100f;
-        private const float StaminaDrain = 35f;
-        private const float StaminaRegen = 18f;
         private const float EnemyBaseSpeed = 2.6f;
         private const float EnemyRetargetSeconds = 0.5f;
         private const float EnemySpawnSeconds = 10f;
         private const float CollisionDistance = 0.78f;
-        private const float InvincibleSeconds = 2f;
         private const float StrideLength = 1.3f;
         private const float CornerInset = 2.5f;
 
@@ -65,9 +58,7 @@ namespace SnowEscape
         private readonly bool[,] packedSnow =
             new bool[Mathf.RoundToInt(WorldWidth / CellSize), Mathf.RoundToInt(WorldHeight / CellSize)];
 
-        private Walker player;
-        private GameObject playerVisual;
-        private Transform playerBody;
+        private SnowEscapePlayer player;
         private Camera gameCamera;
         private Canvas canvas;
         private RectTransform titlePanel;
@@ -81,8 +72,6 @@ namespace SnowEscape
         private GameState state;
         private float survivalTime;
         private float spawnTimer;
-        private float stamina;
-        private float invincibleTimer;
         private float flashTimer;
         private float milestoneTimer;
         private int lives;
@@ -115,7 +104,7 @@ namespace SnowEscape
 
             survivalTime += dt;
             spawnTimer += dt;
-            invincibleTimer = Mathf.Max(0f, invincibleTimer - dt);
+            player.TickTimers(dt);
 
             UpdatePlayer(dt);
             SpawnEnemiesOverTime();
@@ -229,31 +218,7 @@ namespace SnowEscape
 
         private void BuildPlayer()
         {
-            player = new Walker();
-            playerVisual = new GameObject("Player");
-
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Coat";
-            body.transform.SetParent(playerVisual.transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.62f, 0f);
-            body.transform.localScale = new Vector3(0.52f, 0.62f, 0.52f);
-            body.GetComponent<Renderer>().material = MakeMaterial(new Color(0.82f, 0.20f, 0.16f), 0.05f);
-            playerBody = body.transform;
-
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Head";
-            head.transform.SetParent(playerVisual.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.40f, 0f);
-            head.transform.localScale = Vector3.one * 0.55f;
-            head.GetComponent<Renderer>().material = MakeMaterial(new Color(1f, 0.77f, 0.60f), 0.02f);
-
-            var hat = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            hat.name = "White Hat";
-            hat.transform.SetParent(playerVisual.transform, false);
-            hat.transform.localPosition = new Vector3(0f, 1.63f, -0.02f);
-            hat.transform.localScale = new Vector3(0.62f, 0.28f, 0.62f);
-            hat.GetComponent<Renderer>().material = MakeMaterial(Color.white, 0f);
-            worldObjects.Add(playerVisual);
+            player = SnowEscapePlayer.CreateOrReuse();
         }
 
         private void BuildInterface()
@@ -351,18 +316,10 @@ namespace SnowEscape
             footprints.Clear();
             Array.Clear(packedSnow, 0, packedSnow.Length);
 
-            player.Position = Vector3.zero;
-            player.Direction = Vector3.forward;
-            player.Stride = 0f;
-            player.LeftFoot = false;
-            playerVisual.transform.position = player.Position;
-            playerVisual.transform.rotation = Quaternion.identity;
-            playerVisual.SetActive(true);
+            player.ResetPlayer();
 
             survivalTime = 0f;
             spawnTimer = 0f;
-            stamina = StaminaMax;
-            invincibleTimer = 0f;
             lives = 3;
             lastMilestone = 0;
             milestoneTimer = 0f;
@@ -380,7 +337,7 @@ namespace SnowEscape
             timerText.gameObject.SetActive(playing);
             livesText.gameObject.SetActive(playing);
             staminaFill.transform.parent.gameObject.SetActive(playing);
-            playerVisual.SetActive(next != GameState.Title);
+            player.SetPresentationActive(next != GameState.Title);
         }
 
         private void EndGame()
@@ -391,29 +348,9 @@ namespace SnowEscape
 
         private void UpdatePlayer(float dt)
         {
-            Vector2 input = ReadMovement();
-            bool moving = input.sqrMagnitude > 0.001f;
-            bool dashHeld = Keyboard.current != null && Keyboard.current.spaceKey.isPressed;
-            bool dashing = moving && dashHeld && stamina > 0.01f;
-            stamina = Mathf.Clamp(stamina + (dashing ? -StaminaDrain : StaminaRegen) * dt, 0f, StaminaMax);
-
-            if (moving)
-            {
-                input.Normalize();
-                Vector3 direction = new Vector3(input.x, 0f, input.y);
-                float distance = (dashing ? DashSpeed : NormalSpeed) * dt;
-                Vector3 next = player.Position + direction * distance;
-                next.x = Mathf.Clamp(next.x, -WorldWidth / 2f + 0.55f, WorldWidth / 2f - 0.55f);
-                next.z = Mathf.Clamp(next.z, -WorldHeight / 2f + 0.55f, WorldHeight / 2f - 0.55f);
-                float actualDistance = Vector3.Distance(player.Position, next);
-                player.Position = next;
-                player.Direction = direction;
-                playerVisual.transform.position = next;
-                playerVisual.transform.rotation = Quaternion.LookRotation(direction);
-                float bounce = Mathf.Sin(Time.time * (dashing ? 15f : 10f)) * 0.045f;
-                playerBody.localPosition = new Vector3(0f, 0.62f + bounce, 0f);
-                AdvanceFootsteps(player, actualDistance, dashing ? 1.55f : 1f);
-            }
+            SnowEscapePlayer.Movement movement = player.Move(dt);
+            if (player.TryTakeFootstep(movement.Distance, out bool leftFoot))
+                PlaceFootprint(player.Position, player.Direction, leftFoot, movement.FootprintScale);
         }
 
         private void SpawnEnemiesOverTime()
@@ -473,11 +410,11 @@ namespace SnowEscape
                 }
                 enemy.Visual.transform.position = enemy.Position + Vector3.up * 0.75f;
 
-                if (invincibleTimer <= 0f &&
+                if (player.CanBeHit &&
                     Vector3.Distance(enemy.Position, player.Position) <= CollisionDistance)
                 {
                     lives--;
-                    invincibleTimer = InvincibleSeconds;
+                    player.TakeHit();
                     flashTimer = 0.42f;
                     if (lives <= 0)
                     {
@@ -524,13 +461,10 @@ namespace SnowEscape
         {
             timerText.text = FormatTime(survivalTime);
             livesText.text = lives > 0 ? string.Join(" ", new string('♥', lives).ToCharArray()) : "";
-            staminaFill.fillAmount = stamina / StaminaMax;
-            staminaFill.color = stamina < 22f
+            staminaFill.fillAmount = player.StaminaRatio;
+            staminaFill.color = player.Stamina < 22f
                 ? new Color(1f, 0.44f, 0.28f)
                 : new Color(0.23f, 0.78f, 0.62f);
-            float pulse = invincibleTimer > 0f ? Mathf.PingPong(Time.time * 7f, 1f) : 1f;
-            foreach (Renderer renderer in playerVisual.GetComponentsInChildren<Renderer>())
-                renderer.enabled = invincibleTimer <= 0f || pulse > 0.35f;
         }
 
         private void UpdateMilestones(float dt)
@@ -556,19 +490,6 @@ namespace SnowEscape
             flashTimer -= dt;
             float alpha = Mathf.Clamp01(flashTimer / 0.42f) * 0.34f;
             damageFlash.color = new Color(1f, 0.06f, 0.02f, alpha);
-        }
-
-        private static Vector2 ReadMovement()
-        {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null) return Vector2.zero;
-            float x = 0f;
-            float y = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) x -= 1f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) x += 1f;
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) y -= 1f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) y += 1f;
-            return new Vector2(x, y);
         }
 
         private static string FormatTime(float value)
