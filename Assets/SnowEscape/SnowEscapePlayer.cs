@@ -36,6 +36,7 @@ namespace SnowEscape
         private float stride;
         private bool leftFoot;
         private float invincibleTimer;
+        private bool firstPersonView;
 
         public Vector3 Position => transform.position;
         public Vector3 Direction { get; private set; } = Vector3.forward;
@@ -100,6 +101,7 @@ namespace SnowEscape
             stride = 0f;
             leftFoot = false;
             invincibleTimer = 0f;
+            firstPersonView = false;
             SetRenderersVisible(true);
             if (body != null) body.localPosition = bodyBasePosition;
             gameObject.SetActive(true);
@@ -112,9 +114,13 @@ namespace SnowEscape
             SetRenderersVisible(visible);
         }
 
-        public Movement Move(float deltaTime)
+        public Movement Move(
+            float deltaTime,
+            bool firstPerson,
+            Vector3 cameraForward,
+            Vector3 cameraRight)
         {
-            Vector2 input = ReadMovement();
+            Vector2 input = ReadMovement(firstPerson);
             bool moving = input.sqrMagnitude > 0.001f;
             Keyboard keyboard = Keyboard.current;
             bool dashHeld = keyboard != null && keyboard.spaceKey.isPressed;
@@ -127,15 +133,17 @@ namespace SnowEscape
             if (!moving) return new Movement(0f, 1f);
 
             input.Normalize();
-            Vector3 direction = new(input.x, 0f, input.y);
+            Vector3 direction = firstPerson
+                ? (cameraRight * input.x + cameraForward * input.y).normalized
+                : new Vector3(input.x, 0f, input.y);
             float requestedDistance = (dashing ? DashSpeed : NormalSpeed) * deltaTime;
             Vector3 oldPosition = transform.position;
             Vector3 next = oldPosition + direction * requestedDistance;
             next.x = Mathf.Clamp(next.x, -WorldWidth / 2f + 0.55f, WorldWidth / 2f - 0.55f);
             next.z = Mathf.Clamp(next.z, -WorldHeight / 2f + 0.55f, WorldHeight / 2f - 0.55f);
 
-            Direction = direction;
-            transform.SetPositionAndRotation(next, Quaternion.LookRotation(direction));
+            Direction = firstPerson ? cameraForward.normalized : direction;
+            transform.SetPositionAndRotation(next, Quaternion.LookRotation(Direction));
             if (body != null)
             {
                 float bounce = Mathf.Sin(Time.time * (dashing ? 15f : 10f)) * 0.045f;
@@ -170,6 +178,13 @@ namespace SnowEscape
             gameObject.SetActive(active);
         }
 
+        public void SetFirstPersonView(bool firstPerson)
+        {
+            firstPersonView = firstPerson;
+            if (firstPerson) SetRenderersVisible(false);
+            else TickTimers(0f);
+        }
+
         private void CacheVisualParts()
         {
             renderers = GetComponentsInChildren<Renderer>(true);
@@ -181,19 +196,29 @@ namespace SnowEscape
         {
             if (renderers == null) return;
             foreach (Renderer playerRenderer in renderers)
-                if (playerRenderer != null) playerRenderer.enabled = visible;
+                if (playerRenderer != null) playerRenderer.enabled = visible && !firstPersonView;
         }
 
-        private static Vector2 ReadMovement()
+        private static Vector2 ReadMovement(bool firstPerson)
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return Vector2.zero;
             float x = 0f;
             float y = 0f;
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) x -= 1f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) x += 1f;
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) y -= 1f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) y += 1f;
+            if (firstPerson)
+            {
+                if (keyboard.aKey.isPressed) x -= 1f;
+                if (keyboard.dKey.isPressed) x += 1f;
+                if (keyboard.sKey.isPressed) y -= 1f;
+                if (keyboard.wKey.isPressed) y += 1f;
+            }
+            else
+            {
+                if (keyboard.leftArrowKey.isPressed) x -= 1f;
+                if (keyboard.rightArrowKey.isPressed) x += 1f;
+                if (keyboard.downArrowKey.isPressed) y -= 1f;
+                if (keyboard.upArrowKey.isPressed) y += 1f;
+            }
             return new Vector2(x, y);
         }
 
