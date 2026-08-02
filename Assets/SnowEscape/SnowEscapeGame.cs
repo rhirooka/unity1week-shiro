@@ -135,10 +135,10 @@ namespace SnowEscape
 
             RenderSettings.ambientLight = new Color(0.58f, 0.65f, 0.72f);
             RenderSettings.fog = true;
-            RenderSettings.fogColor = new Color(0.10f, 0.14f, 0.19f);
+            RenderSettings.fogColor = new Color(0.30f, 0.36f, 0.42f);
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 28f;
-            RenderSettings.fogEndDistance = 48f;
+            RenderSettings.fogStartDistance = 45f;
+            RenderSettings.fogEndDistance = 60f;
 
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
             ground.name = "Snow Field";
@@ -174,12 +174,14 @@ namespace SnowEscape
             sunObject.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
             worldObjects.Add(sunObject);
 
+            QualitySettings.shadowDistance = 50f;
+
             var cameraObject = new GameObject("Snow Escape Camera");
             gameCamera = cameraObject.AddComponent<Camera>();
             gameCamera.orthographic = true;
             gameCamera.orthographicSize = 14f;
             gameCamera.clearFlags = CameraClearFlags.SolidColor;
-            gameCamera.backgroundColor = new Color(0.055f, 0.075f, 0.105f);
+            gameCamera.backgroundColor = new Color(0.30f, 0.36f, 0.42f);
             gameCamera.transform.position = new Vector3(0f, 30f, -12.1f);
             gameCamera.transform.LookAt(Vector3.zero);
             cameraObject.AddComponent<AudioListener>();
@@ -188,15 +190,15 @@ namespace SnowEscape
 
         private void BuildTrees()
         {
-            for (float x = -WorldWidth / 2f; x <= WorldWidth / 2f; x += 3.6f)
+            for (float x = -WorldWidth / 2f; x <= WorldWidth / 2f; x += 1.2f)
             {
                 MakeTree(new Vector3(x, 0f, -WorldHeight / 2f - 0.7f), 0.85f + Random.value * 0.3f);
-                MakeTree(new Vector3(x + 1.2f, 0f, WorldHeight / 2f + 0.7f), 0.85f + Random.value * 0.3f);
+                MakeTree(new Vector3(x + 0.6f, 0f, WorldHeight / 2f + 0.7f), 0.85f + Random.value * 0.3f);
             }
-            for (float z = -WorldHeight / 2f + 2f; z < WorldHeight / 2f; z += 3.5f)
+            for (float z = -WorldHeight / 2f + 2f; z < WorldHeight / 2f; z += 1.15f)
             {
                 MakeTree(new Vector3(-WorldWidth / 2f - 0.7f, 0f, z), 0.85f + Random.value * 0.3f);
-                MakeTree(new Vector3(WorldWidth / 2f + 0.7f, 0f, z + 1.1f), 0.85f + Random.value * 0.3f);
+                MakeTree(new Vector3(WorldWidth / 2f + 0.7f, 0f, z + 0.55f), 0.85f + Random.value * 0.3f);
             }
         }
 
@@ -270,16 +272,16 @@ namespace SnowEscape
                 worldObjects.Add(eventSystem);
             }
 
-            timerText = CreateText("Timer", canvas.transform, "00:00", 42, TextAnchor.UpperLeft);
+            timerText = CreateText("Timer", canvas.transform, "00:00", 84, TextAnchor.UpperLeft);
             SetRect(timerText.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f),
-                new Vector2(35f, -28f), new Vector2(250f, 70f));
-            livesText = CreateText("Lives", canvas.transform, "♥ ♥ ♥", 34, TextAnchor.UpperRight);
+                new Vector2(35f, -28f), new Vector2(500f, 140f));
+            livesText = CreateText("Lives", canvas.transform, "♥ ♥ ♥", 68, TextAnchor.UpperRight);
             livesText.color = new Color(1f, 0.45f, 0.40f);
             SetRect(livesText.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f),
-                new Vector2(-35f, -30f), new Vector2(260f, 60f));
+                new Vector2(-35f, -30f), new Vector2(520f, 120f));
 
             var hint = CreateText("Controls", canvas.transform,
-                "移動: WASD / 矢印キー　　ダッシュ: Shift", 21, TextAnchor.LowerLeft);
+                "移動: WASD / 矢印キー　　ダッシュ: Space", 21, TextAnchor.LowerLeft);
             hint.color = new Color(0.86f, 0.91f, 0.94f);
             SetRect(hint.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f),
                 new Vector2(28f, 24f), new Vector2(520f, 48f));
@@ -391,8 +393,7 @@ namespace SnowEscape
         {
             Vector2 input = ReadMovement();
             bool moving = input.sqrMagnitude > 0.001f;
-            bool dashHeld = Keyboard.current != null &&
-                (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed);
+            bool dashHeld = Keyboard.current != null && Keyboard.current.spaceKey.isPressed;
             bool dashing = moving && dashHeld && stamina > 0.01f;
             stamina = Mathf.Clamp(stamina + (dashing ? -StaminaDrain : StaminaRegen) * dt, 0f, StaminaMax);
 
@@ -510,7 +511,9 @@ namespace SnowEscape
             mark.name = "Permanent Footprint";
             mark.transform.position = new Vector3(position.x, 0.025f, position.z) + lateral;
             mark.transform.rotation = Quaternion.LookRotation(direction);
-            mark.transform.localScale = new Vector3(0.32f * scale, 0.025f, 0.64f * scale);
+            float sizeMultiplier = scale >= 2f ? 1.2f : 1.4f;
+            mark.transform.localScale = new Vector3(0.32f * sizeMultiplier * scale, 0.025f,
+                0.64f * sizeMultiplier * scale);
             mark.GetComponent<Renderer>().material = footprintMaterial;
             Collider collider = mark.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
