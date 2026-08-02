@@ -88,7 +88,6 @@ namespace SnowEscape
         private int lives;
         private int lastMilestone;
         private Material footprintMaterial;
-        private Material packedMaterial;
         private Material ghostDebugMaterial;
         private Font font;
 
@@ -161,7 +160,6 @@ namespace SnowEscape
             BuildPlayer();
 
             footprintMaterial = MakeMaterial(new Color(0.34f, 0.43f, 0.48f), 0f);
-            packedMaterial = MakeMaterial(new Color(0.72f, 0.81f, 0.85f), 0f);
             ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.24f));
         }
 
@@ -505,7 +503,6 @@ namespace SnowEscape
             int gx = Mathf.FloorToInt((position.x + WorldWidth / 2f) / CellSize);
             int gy = Mathf.FloorToInt((position.z + WorldHeight / 2f) / CellSize);
             if (gx < 0 || gy < 0 || gx >= packedSnow.GetLength(0) || gy >= packedSnow.GetLength(1)) return;
-            if (packedSnow[gx, gy]) return;
             packedSnow[gx, gy] = true;
 
             Vector3 lateral = Vector3.Cross(Vector3.up, direction).normalized * (left ? 0.27f : -0.27f);
@@ -513,9 +510,8 @@ namespace SnowEscape
             mark.name = "Permanent Footprint";
             mark.transform.position = new Vector3(position.x, 0.025f, position.z) + lateral;
             mark.transform.rotation = Quaternion.LookRotation(direction);
-            mark.transform.localScale = new Vector3(0.32f * Mathf.Min(scale, 1.65f), 0.025f,
-                0.64f * Mathf.Min(scale, 1.65f));
-            mark.GetComponent<Renderer>().material = scale >= 2f ? packedMaterial : footprintMaterial;
+            mark.transform.localScale = new Vector3(0.32f * scale, 0.025f, 0.64f * scale);
+            mark.GetComponent<Renderer>().material = footprintMaterial;
             Collider collider = mark.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
             footprints.Add(mark);
