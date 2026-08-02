@@ -23,6 +23,9 @@ namespace SnowEscape
         private const float CollisionDistance = 0.78f;
         private const float StrideLength = 1.3f;
         private const float CornerInset = 2.5f;
+        // Keep the whole stage prominent while preserving the scale relationship
+        // between the snow field, characters, and footprints.
+        private const float CameraOrthographicSize = 11.25f;
 
         private enum GameState { Title, Playing, Ended }
 
@@ -168,7 +171,7 @@ namespace SnowEscape
             var cameraObject = new GameObject("Snow Escape Camera");
             gameCamera = cameraObject.AddComponent<Camera>();
             gameCamera.orthographic = true;
-            gameCamera.orthographicSize = 14f;
+            gameCamera.orthographicSize = CameraOrthographicSize;
             gameCamera.clearFlags = CameraClearFlags.SolidColor;
             gameCamera.backgroundColor = new Color(0.30f, 0.36f, 0.42f);
             gameCamera.transform.position = new Vector3(0f, 30f, -12.1f);
