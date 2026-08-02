@@ -69,11 +69,13 @@ namespace SnowEscape
 
         private SnowEscapePlayer player;
         private Camera gameCamera;
+        private SnowEscapeCamera cameraController;
         private Canvas canvas;
         private RectTransform titlePanel;
         private RectTransform resultPanel;
         private Text timerText;
         private Text livesText;
+        private Text controlsHint;
         private Text milestoneText;
         private Text finalTimeText;
         private Image staminaFill;
@@ -116,6 +118,8 @@ namespace SnowEscape
             spawnTimer += dt;
             stationarySpawnTimer += dt;
             player.TickTimers(dt);
+            cameraController.TickInput();
+            UpdateControlsHintColor();
 
             UpdatePlayer(dt);
             SpawnEnemiesOverTime();
@@ -158,6 +162,8 @@ namespace SnowEscape
             BuildTrees();
             BuildLightingAndCamera();
             BuildPlayer();
+            cameraController = gameCamera.gameObject.AddComponent<SnowEscapeCamera>();
+            cameraController.Initialize(gameCamera, player);
 
             footprintMaterial = MakeMaterial(new Color(0.34f, 0.43f, 0.48f), 0f);
             ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.72f));
@@ -256,11 +262,11 @@ namespace SnowEscape
             SetRect(livesText.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(-35f, -30f), new Vector2(520f, 120f));
 
-            var hint = CreateText("Controls", canvas.transform,
-                "移動: WASD / 矢印キー　　ダッシュ: Space", 21, TextAnchor.LowerLeft);
-            hint.color = new Color(0.86f, 0.91f, 0.94f);
-            SetRect(hint.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f),
-                new Vector2(28f, 24f), new Vector2(520f, 48f));
+            controlsHint = CreateText("Controls", canvas.transform,
+                "俯瞰: 矢印キー　　一人称: WASD＋マウス　　ダッシュ: Space　　視点切替: C", 21, TextAnchor.LowerLeft);
+            controlsHint.color = new Color(0.86f, 0.91f, 0.94f);
+            SetRect(controlsHint.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(28f, 24f), new Vector2(900f, 48f));
 
             var staminaBack = CreateImage("Stamina Background", canvas.transform, new Color(0f, 0f, 0f, 0.42f));
             SetRect(staminaBack.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -328,6 +334,7 @@ namespace SnowEscape
             Array.Clear(packedSnow, 0, packedSnow.Length);
 
             player.ResetPlayer();
+            cameraController.ResetView();
 
             survivalTime = 0f;
             spawnTimer = 0f;
@@ -350,6 +357,8 @@ namespace SnowEscape
             livesText.gameObject.SetActive(playing);
             staminaFill.transform.parent.gameObject.SetActive(playing);
             player.SetPresentationActive(next != GameState.Title);
+            cameraController.SetGameplayActive(playing);
+            UpdateControlsHintColor();
         }
 
         private void EndGame()
@@ -360,7 +369,11 @@ namespace SnowEscape
 
         private void UpdatePlayer(float dt)
         {
-            SnowEscapePlayer.Movement movement = player.Move(dt);
+            SnowEscapePlayer.Movement movement = player.Move(
+                dt,
+                cameraController.IsFirstPerson,
+                cameraController.PlanarForward,
+                cameraController.PlanarRight);
             if (player.TryTakeFootstep(movement.Distance, out bool leftFoot))
                 PlaceFootprint(player.Position, player.Direction, leftFoot, movement.FootprintScale);
         }
@@ -518,6 +531,13 @@ namespace SnowEscape
             staminaFill.color = player.Stamina < 22f
                 ? new Color(1f, 0.44f, 0.28f)
                 : new Color(0.23f, 0.78f, 0.62f);
+        }
+
+        private void UpdateControlsHintColor()
+        {
+            controlsHint.color = cameraController.IsFirstPerson
+                ? Color.black
+                : new Color(0.86f, 0.91f, 0.94f);
         }
 
         private void UpdateMilestones(float dt)
