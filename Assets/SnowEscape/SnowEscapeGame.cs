@@ -101,7 +101,7 @@ namespace SnowEscape
 
         private void Awake()
         {
-            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            font = Resources.Load<Font>("Fonts/NotoSansJP-Regular") ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildWorld();
             BuildInterface();
             ResetGame();
@@ -301,7 +301,7 @@ namespace SnowEscape
 
         private void CreateCenteredTitle(RectTransform panel, string heading, string description, string button, Action action)
         {
-            var title = CreateText("Title", panel, heading, 78, TextAnchor.MiddleCenter);
+            var title = CreateText("Title", panel, heading, 56, TextAnchor.MiddleCenter);
             SetRect(title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0f, 190f), new Vector2(900f, 110f));
             var subtitle = CreateText("Subtitle", panel, description, 30, TextAnchor.MiddleCenter);
