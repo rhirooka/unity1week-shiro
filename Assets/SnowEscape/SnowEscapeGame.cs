@@ -24,6 +24,7 @@ namespace SnowEscape
         private const float NearbyEnemySpawnChance = 0.2f;
         private const float NearbySpawnMinDistance = 4f;
         private const float NearbySpawnMaxDistance = 7f;
+        private const float StationaryEnemyRevealDistance = 3f; // 300 cm
         private const float CollisionDistance = 0.78f;
         private const float StrideLength = 1.3f;
         private const float CornerInset = 2.5f;
@@ -159,7 +160,7 @@ namespace SnowEscape
             BuildPlayer();
 
             footprintMaterial = MakeMaterial(new Color(0.34f, 0.43f, 0.48f), 0f);
-            ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.24f));
+            ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.72f));
         }
 
         private void BuildLightingAndCamera()
@@ -412,7 +413,7 @@ namespace SnowEscape
             position += new Vector3(Random.Range(-0.8f, 0.8f), 0f, Random.Range(-0.8f, 0.8f));
             var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             visual.name = stationary
-                ? "Stationary Invisible Oni (debug silhouette)"
+                ? "Stationary Oni"
                 : "Invisible Oni (debug silhouette)";
             visual.transform.position = position + Vector3.up * 0.75f;
             visual.transform.localScale = new Vector3(0.7f, 0.8f, 0.7f);
@@ -459,9 +460,11 @@ namespace SnowEscape
                     }
                 }
                 enemy.Visual.transform.position = enemy.Position + Vector3.up * 0.75f;
+                float distanceToPlayer = Vector3.Distance(enemy.Position, player.Position);
+                enemy.Visual.SetActive(
+                    enemy.Stationary && distanceToPlayer <= StationaryEnemyRevealDistance);
 
-                if (player.CanBeHit &&
-                    Vector3.Distance(enemy.Position, player.Position) <= CollisionDistance)
+                if (player.CanBeHit && distanceToPlayer <= CollisionDistance)
                 {
                     lives--;
                     player.TakeHit();
