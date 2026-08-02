@@ -201,10 +201,10 @@ namespace SnowEscape
                 MakeTree(new Vector3(x, 0f, -WorldHeight / 2f - 0.7f), 0.85f + Random.value * 0.3f);
                 MakeTree(new Vector3(x + 0.6f, 0f, WorldHeight / 2f + 0.7f), 0.85f + Random.value * 0.3f);
             }
-            for (float z = -WorldHeight / 2f + 2f; z < WorldHeight / 2f; z += 1.15f)
+            for (float z = -WorldHeight / 2f; z <= WorldHeight / 2f; z += 1.15f)
             {
                 MakeTree(new Vector3(-WorldWidth / 2f - 0.7f, 0f, z), 0.85f + Random.value * 0.3f);
-                MakeTree(new Vector3(WorldWidth / 2f + 0.7f, 0f, z + 0.55f), 0.85f + Random.value * 0.3f);
+                MakeTree(new Vector3(WorldWidth / 2f + 0.7f, 0f, z), 0.85f + Random.value * 0.3f);
             }
         }
 
