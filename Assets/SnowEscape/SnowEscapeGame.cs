@@ -20,9 +20,17 @@ namespace SnowEscape
         private const float EnemyBaseSpeed = 2.6f;
         private const float EnemyRetargetSeconds = 0.5f;
         private const float EnemySpawnSeconds = 10f;
+        private const float StationaryEnemySpawnSeconds = 60f;
+        private const float NearbyEnemySpawnChance = 0.2f;
+        private const float NearbySpawnMinDistance = 4f;
+        private const float NearbySpawnMaxDistance = 7f;
+        private const float StationaryEnemyRevealDistance = 3f; // 300 cm
         private const float CollisionDistance = 0.78f;
         private const float StrideLength = 1.3f;
         private const float CornerInset = 2.5f;
+        // Keep the whole stage prominent while preserving the scale relationship
+        // between the snow field, characters, and footprints.
+        private const float CameraOrthographicSize = 11.25f;
 
         private enum GameState { Title, Playing, Ended }
 
@@ -42,6 +50,7 @@ namespace SnowEscape
             public float RetargetTimer;
             public float Speed;
             public bool Runner;
+            public bool Stationary;
         }
 
         private static readonly Vector3[] SpawnCorners =
@@ -72,6 +81,7 @@ namespace SnowEscape
         private GameState state;
         private float survivalTime;
         private float spawnTimer;
+        private float stationarySpawnTimer;
         private float flashTimer;
         private float milestoneTimer;
         private int lives;
@@ -104,6 +114,7 @@ namespace SnowEscape
 
             survivalTime += dt;
             spawnTimer += dt;
+            stationarySpawnTimer += dt;
             player.TickTimers(dt);
 
             UpdatePlayer(dt);
@@ -149,7 +160,7 @@ namespace SnowEscape
             BuildPlayer();
 
             footprintMaterial = MakeMaterial(new Color(0.34f, 0.43f, 0.48f), 0f);
-            ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.24f));
+            ghostDebugMaterial = MakeTransparentMaterial(new Color(0.55f, 0.82f, 1f, 0.72f));
         }
 
         private void BuildLightingAndCamera()
@@ -168,7 +179,7 @@ namespace SnowEscape
             var cameraObject = new GameObject("Snow Escape Camera");
             gameCamera = cameraObject.AddComponent<Camera>();
             gameCamera.orthographic = true;
-            gameCamera.orthographicSize = 14f;
+            gameCamera.orthographicSize = CameraOrthographicSize;
             gameCamera.clearFlags = CameraClearFlags.SolidColor;
             gameCamera.backgroundColor = new Color(0.30f, 0.36f, 0.42f);
             gameCamera.transform.position = new Vector3(0f, 30f, -12.1f);
@@ -320,6 +331,7 @@ namespace SnowEscape
 
             survivalTime = 0f;
             spawnTimer = 0f;
+            stationarySpawnTimer = 0f;
             lives = 3;
             lastMilestone = 0;
             milestoneTimer = 0f;
@@ -358,16 +370,51 @@ namespace SnowEscape
             while (spawnTimer >= EnemySpawnSeconds)
             {
                 spawnTimer -= EnemySpawnSeconds;
-                Vector3 corner = SpawnCorners[Random.Range(0, SpawnCorners.Length)];
-                SpawnEnemy(corner, Random.value < 1f / 3f ? 3f : 1f);
+                SpawnEnemy(GetRegularSpawnPosition(), Random.value < 1f / 3f ? 3f : 1f);
+            }
+
+            while (stationarySpawnTimer >= StationaryEnemySpawnSeconds)
+            {
+                stationarySpawnTimer -= StationaryEnemySpawnSeconds;
+                SpawnEnemy(GetStationarySpawnPosition(), 1f, true);
             }
         }
 
-        private void SpawnEnemy(Vector3 position, float footScale)
+        private Vector3 GetRegularSpawnPosition()
+        {
+            if (Random.value >= NearbyEnemySpawnChance)
+                return SpawnCorners[Random.Range(0, SpawnCorners.Length)];
+
+            Vector2 offset = Random.insideUnitCircle.normalized *
+                Random.Range(NearbySpawnMinDistance, NearbySpawnMaxDistance);
+            Vector3 position = player.Position + new Vector3(offset.x, 0f, offset.y);
+            position.x = Mathf.Clamp(position.x, -WorldWidth / 2f + CornerInset, WorldWidth / 2f - CornerInset);
+            position.z = Mathf.Clamp(position.z, -WorldHeight / 2f + CornerInset, WorldHeight / 2f - CornerInset);
+            return position;
+        }
+
+        private Vector3 GetStationarySpawnPosition()
+        {
+            Vector3 position = Vector3.zero;
+            for (int attempt = 0; attempt < 12; attempt++)
+            {
+                position = new Vector3(
+                    Random.Range(-WorldWidth / 2f + CornerInset, WorldWidth / 2f - CornerInset),
+                    0f,
+                    Random.Range(-WorldHeight / 2f + CornerInset, WorldHeight / 2f - CornerInset));
+                if (Vector3.Distance(position, player.Position) >= NearbySpawnMinDistance)
+                    break;
+            }
+            return position;
+        }
+
+        private void SpawnEnemy(Vector3 position, float footScale, bool stationary = false)
         {
             position += new Vector3(Random.Range(-0.8f, 0.8f), 0f, Random.Range(-0.8f, 0.8f));
             var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            visual.name = "Invisible Oni (debug silhouette)";
+            visual.name = stationary
+                ? "Stationary Oni"
+                : "Invisible Oni (debug silhouette)";
             visual.transform.position = position + Vector3.up * 0.75f;
             visual.transform.localScale = new Vector3(0.7f, 0.8f, 0.7f);
             visual.GetComponent<Renderer>().material = ghostDebugMaterial;
@@ -382,7 +429,8 @@ namespace SnowEscape
                 RetargetTimer = Random.Range(0.05f, EnemyRetargetSeconds),
                 FootScale = footScale,
                 Visual = visual,
-                Runner = Random.value < 0.18f
+                Runner = !stationary && Random.value < 0.18f,
+                Stationary = stationary
             });
         }
 
@@ -390,28 +438,33 @@ namespace SnowEscape
         {
             foreach (Enemy enemy in enemies)
             {
-                enemy.RetargetTimer -= dt;
-                if (enemy.RetargetTimer <= 0f)
+                if (!enemy.Stationary)
                 {
-                    enemy.Target = player.Position;
-                    enemy.RetargetTimer += EnemyRetargetSeconds + Random.Range(-0.08f, 0.08f);
-                }
+                    enemy.RetargetTimer -= dt;
+                    if (enemy.RetargetTimer <= 0f)
+                    {
+                        enemy.Target = player.Position;
+                        enemy.RetargetTimer += EnemyRetargetSeconds + Random.Range(-0.08f, 0.08f);
+                    }
 
-                Vector3 toTarget = enemy.Target - enemy.Position;
-                toTarget.y = 0f;
-                if (toTarget.sqrMagnitude > 0.01f)
-                {
-                    Vector3 direction = toTarget.normalized;
-                    float runnerBoost = enemy.Runner && Mathf.Repeat(survivalTime + enemy.Speed, 9f) < 1.4f ? 1.75f : 1f;
-                    float distance = Mathf.Min(toTarget.magnitude, enemy.Speed * runnerBoost * dt);
-                    enemy.Position += direction * distance;
-                    enemy.Direction = direction;
-                    AdvanceFootsteps(enemy, distance, enemy.FootScale);
+                    Vector3 toTarget = enemy.Target - enemy.Position;
+                    toTarget.y = 0f;
+                    if (toTarget.sqrMagnitude > 0.01f)
+                    {
+                        Vector3 direction = toTarget.normalized;
+                        float runnerBoost = enemy.Runner && Mathf.Repeat(survivalTime + enemy.Speed, 9f) < 1.4f ? 1.75f : 1f;
+                        float distance = Mathf.Min(toTarget.magnitude, enemy.Speed * runnerBoost * dt);
+                        enemy.Position += direction * distance;
+                        enemy.Direction = direction;
+                        AdvanceFootsteps(enemy, distance, enemy.FootScale);
+                    }
                 }
                 enemy.Visual.transform.position = enemy.Position + Vector3.up * 0.75f;
+                float distanceToPlayer = Vector3.Distance(enemy.Position, player.Position);
+                enemy.Visual.SetActive(
+                    enemy.Stationary && distanceToPlayer <= StationaryEnemyRevealDistance);
 
-                if (player.CanBeHit &&
-                    Vector3.Distance(enemy.Position, player.Position) <= CollisionDistance)
+                if (player.CanBeHit && distanceToPlayer <= CollisionDistance)
                 {
                     lives--;
                     player.TakeHit();

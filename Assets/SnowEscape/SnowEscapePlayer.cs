@@ -45,7 +45,7 @@ namespace SnowEscape
 
         public static SnowEscapePlayer CreateOrReuse()
         {
-            GameObject visual = GameObject.Find("PenguinPlayer");
+            GameObject visual = FindAuthoredPenguin();
             if (visual == null)
             {
                 GameObject prefab = Resources.Load<GameObject>("Prefabs/PenguinPlayer");
@@ -57,6 +57,39 @@ namespace SnowEscape
             if (controller == null) controller = visual.AddComponent<SnowEscapePlayer>();
             controller.CacheVisualParts();
             return controller;
+        }
+
+        private static GameObject FindAuthoredPenguin()
+        {
+            GameObject authoredPenguin = null;
+            GameObject[] sceneObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+            foreach (GameObject candidate in sceneObjects)
+            {
+                if (candidate.name != "PenguinPlayer" || !candidate.scene.IsValid()) continue;
+
+                bool hasPenguinParts = candidate.transform.Find("Belly") != null &&
+                                       candidate.transform.Find("Beak") != null &&
+                                       candidate.transform.Find("LeftWing") != null &&
+                                       candidate.transform.Find("RightWing") != null;
+                if (hasPenguinParts)
+                {
+                    authoredPenguin = candidate;
+                    break;
+                }
+            }
+
+            if (authoredPenguin == null) return null;
+
+            // With scene reload disabled, a player generated during an earlier
+            // play session can remain. Hide it so only the authored model is used.
+            foreach (GameObject candidate in sceneObjects)
+            {
+                if (candidate != authoredPenguin && candidate.name == "PenguinPlayer" && candidate.scene.IsValid())
+                    candidate.SetActive(false);
+            }
+
+            authoredPenguin.SetActive(true);
+            return authoredPenguin;
         }
 
         public void ResetPlayer()
