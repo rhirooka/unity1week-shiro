@@ -47,8 +47,8 @@ Unity1weekのお題 **「しろ」** をテーマに制作するゲームです�
 ダッシュ中はスタミナを消費し、ダッシュしていない間に回復します。
 
 ---
+# ゲームの実行方法(ゲーム作成者用)
 
-# ゲームの実行方法
 
 1. Unity Hubから`unity1week-shiro`をUnity 6000.3.18f1で開きます。
 2. `Assets/Scenes/SampleScene.unity`を開きます。
@@ -313,22 +313,11 @@ Build/
 UserSettings/
 ```
 
----
-
-# テーマ
-
-Unity1week
-
-**お題：「しろ」**
-
-# Web版公開
-
-`reference/web-demo/index.html`に、ゲーム設計の参考となったWebデモがあります。Unity版とは一部の実装・操作が異なります。
 
 # メンバー
 
-| 名前 | 担当 |
-|------|------|
-| （未記入） | （未記入） |
-| （未記入） | （未記入） |
-| （未記入） | （未記入） |
+| 名前 (github名)|
+|------|
+● katsu-show
+● da-sakamoto
+● rhirooka
